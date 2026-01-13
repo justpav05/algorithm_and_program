@@ -1,6 +1,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 
+int FindIndex(int *array, int *size, int value);
 int FindMin(int *array, int *size);
 int FindMax(int *array, int *size);
 void AddElement(int **array, int *capacity, int ind, int value);
@@ -24,6 +25,13 @@ int main() {
     UpdateArray(&array, &size);
 
     OutputArray(array, &size);
+}
+
+int FindIndex(int *array, int *size, int value) {
+    for (int ind = 0; ind < *size; ind++) {
+        if (array[ind] == value) return ind;
+    }
+    return -1;
 }
 
 int FindMin(int *array, int *size) {
@@ -76,8 +84,22 @@ void OutputArray(int *array, int *size) {
 }
 
 void UpdateArray(int **array, int *size) {
-    int min = FindMin(*array, size);
-    int max = FindMax(*array, size);
+    int *new_array;
 
+    int min_ind = FindIndex(*array, size, FindMin(*array, size));
+    int max_ind = FindIndex(*array, size, FindMax(*array, size));
 
+    int start_ind = (min_ind < max_ind) ? min_ind : max_ind;
+    int end_ind = (min_ind > max_ind) ? min_ind : max_ind;
+
+    *size = end_ind - start_ind + 1;
+
+    new_array = (int*)calloc(*size, sizeof(int));
+
+    for (int ind = start_ind; ind <= end_ind; ind++) {
+        new_array[ind - start_ind] = (*array)[ind];
+    }
+
+    free(*array);
+    *array = new_array;
 }
