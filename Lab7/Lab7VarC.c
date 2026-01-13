@@ -79,10 +79,5 @@ void UpdateArray(int **array, int *size) {
     int min = FindMin(*array, size);
     int max = FindMax(*array, size);
 
-    *size = 2;
 
-    *array = (int*)realloc(*array, *size * sizeof(int));
-
-    (*array)[0] = min;
-    (*array)[1] = max;
 }
