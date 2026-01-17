@@ -15,18 +15,20 @@ typedef struct {
 size_t GetLineLengthFromFile(FILE*);
 bool FreeTextBuffer(Text*);
 
-char* ReadLineFromFile(FILE *);
-bool InputTextFormFile(FILE *, Text**);
-bool ParseText(Text*, const char *, const char *);
-bool WriteHTMLFile(FILE *, FILE *, Text**);
+char* ReadLineFromFile(FILE*);
+bool InputTextFormFile(FILE*, Text**);
+bool ParseText(Text*, const char*, const char*);
+bool WriteHTMLFile(FILE*, FILE*, Text*, Text*, const char*);
 bool OutputText(Text*);
 
 int main(void) {
+    char *marker = "{{CONTENT}}";
     const char *opening = "<H1>";
     const char *closing = "</H1>";
 
     const char *input_filename = "input.txt";
     const char *output_filename = "output.txt";
+    const char *html_structure_filename = "html_structure.txt";
 
     Text *text_buffer = (Text*)calloc(1, sizeof(Text));
     if (!text_buffer) {
@@ -43,6 +45,18 @@ int main(void) {
     FILE *input_file = fopen(input_filename, "r");
     if (!input_file) {
         fprintf(stderr, "Ошибка: не удалось считать файл input.txt\n");
+        return 1;
+    }
+
+    FILE *input_html_structure_file = fopen(html_structure_filename, "r");
+    if (!input_html_structure_file) {
+        fprintf(stderr, "Ошибка: не удалось считать файл html_structure.txt\n");
+        return 1;
+    }
+
+    FILE *output = fopen(output_filename, "w");
+    if (!output) {
+        fprintf(stderr, "Ошибка: не удалось создать файл %s\n", output_filename);
         return 1;
     }
 
@@ -63,11 +77,11 @@ int main(void) {
         return 1;
     }
 
-    FILE *output = fopen(output_filename, "w");
-    if (!output) {
-        fprintf(stderr, "Ошибка: не удалось создать файл %s\n", output_filename);
+    if (!WriteHTMLFile(input_html_structure_file, output, html_structure, text_buffer, marker)) {
+        fprintf(stderr, "Ошибка: не удалось вывести текст в файл html\n");
         return 1;
     }
+
 
     if (!FreeTextBuffer(text_buffer)) {
         fprintf(stderr, "Ошибка: не удалось освободить память\n");
@@ -150,6 +164,8 @@ bool ParseText(Text* text_buffer, const char *opening, const char *closing) {
             if (*char_ptr == 'A') { flag = true; break; }
         }
         if (flag) {
+            flag = false;
+
             int updated_len = strlen(opening) + strlen(closing) + strlen(*line) + 1;
             char *updated_line = (char*)calloc(updated_len, sizeof(char));
             if (!updated_line) { continue; }
@@ -164,12 +180,25 @@ bool ParseText(Text* text_buffer, const char *opening, const char *closing) {
     return true;
 }
 
-bool WriteHTMLFile(FILE *input_html_structure_file, FILE *output, Text** html_structure) {
-    if (!InputTextFormFile(input_html_structure_file, html_structure)) { return false; }
+bool WriteHTMLFile(FILE *input_html_structure_file, FILE *output, Text* html_structure, Text* text_buffer, const char *marker) {
+    if (!InputTextFormFile(input_html_structure_file, &html_structure)) { return false; }
 
-    char **end = (*html_structure)->lines + (*html_structure)->count;
-    for (char **line = (*html_structure)->lines; line < end; line++) {
-        fprintf(output, "%s\n", *line);
+    char **end = html_structure->lines + html_structure->count;
+    for (char **structure_line = html_structure->lines; structure_line < end; structure_line++) {
+        char *record_line = strstr(*structure_line, marker);
+
+        if (record_line) {
+            *record_line = '\0';
+            fprintf(output, "%s", *structure_line);
+
+            char **text_end = text_buffer->lines + text_buffer->count;
+            for (char **text_line = text_buffer->lines; text_line < text_end; text_line++) {
+                fprintf(output, "%s\n", *text_line);
+            }
+            fprintf(output, "%s", record_line + strlen(marker));
+        } else {
+            fprintf(output, "%s\n", *structure_line);
+        }
     }
 
     return true;
