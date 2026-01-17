@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -fsanitize=address -fsanitize=undefined -g -Wall -Wextra -Iinclude
-SRC = Lab11varA.c
-TARGET = program
+SRC = Lab11VarB.c
+TARGET = Lab11
 
 all: $(TARGET)
 
