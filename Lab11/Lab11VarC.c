@@ -170,44 +170,68 @@ bool InputTextFormFile(FILE *input_file, Text **text_buffer) {
     return true;
 }
 
-bool ProcessWord(Word *word, char **result, size_t *result_len, size_t *result_capacity) {
-    if (word->length == 0) return true;
-
-    size_t needed_size = *result_len;
-
-    if (word->has_A) {
-        // Нужно место для <B><I>слово</I></B>
-        needed_size += strlen("<B><I>") + word->length + strlen("</I></B>");
-    } else {
-        needed_size += word->length;
+bool AddCharToWord(Word *word, char caracter) {
+    if (word->length + 1 >= word->capacity) {
+        word->capacity *= 2;
+        char *new_buffer = (char*)realloc(word->buffer, word->capacity * sizeof(char));
+        if (!new_buffer) return false;
+        word->buffer = new_buffer;
     }
 
-    // Расширяем буфер результата при необходимости
-    while (needed_size + 1 >= *result_capacity) {
-        *result_capacity *= 2;
-        char *new_result = (char*)realloc(*result, *result_capacity);
-        if (!new_result) return false;
-        *result = new_result;
-    }
+    word->buffer[word->length++] = caracter;
 
-    if (word->has_A) {
-        // Заменяем A на * и оборачиваем в теги
-        strcat(*result, "<B><I>");
-        for (size_t i = 0; i < word->length; i++) {
-            char c = word->buffer[i];
-            if (c == 'A' || c == 'a') {
-                c = '*';
-            }
-            size_t len = strlen(*result);
-            (*result)[len] = c;
-            (*result)[len + 1] = '\0';
-        }
-        strcat(*result, "</I></B>");
-    } else {
-        strcat(*result, word->buffer);
-    }
+    return true;
+}
 
-    *result_len = strlen(*result);
+bool AppendToString(char *used_string, char *inserted_string) {
+    if (!used_string || !inserted_string) { return false; }
+
+    size_t str_len = strlen(inserted_string);
+    size_t needed_line_len = strlen(used_string) + str_len;
+    if (str_len == 0) return true;
+
+    char *new_used_string = (char*)realloc(used_string, needed_line_len);
+    if (!new_used_string) { return false; }
+    used_string = new_used_string;
+
+    while (*inserted_string != '\0') { used_string++ = inserted_string++; }
+    (*used_string)[needed_line_len] = '\0';
+
+    return true;
+}
+
+bool AppendWordToLine(char **text_line, size_t *text_line_len, const char *line_add) {
+    size_t str_len = strlen(line_add);
+    size_t needed_line_len = *text_line_len + str_len;
+
+    char *new_text_line = (char*)realloc(*text_line, needed_line_len);
+    if (!new_text_line) return false;
+    *text_line = new_text_line;
+
+    strcat(*text_line, line_add);
+    *text_line_len += str_len;
+
+    return true;
+}
+
+bool ResetWord(Word *word) {
+    if (!word) return false;
+
+    word->length = 0;
+    word->capacity = INITIAL_CAPACITY;
+    if (word->buffer) { free(word->buffer); }
+    word->buffer = (char*)calloc(word->capacity, sizeof(char));
+    if (!word->buffer) return false;
+
+    return true;
+}
+
+bool FreeWord(Word *word) {
+    if (!word) return false;
+
+    if (word->buffer) { free(word->buffer); }
+    free(word);
+
     return true;
 }
 
@@ -215,13 +239,20 @@ bool ParseText(Text* text_buffer, const char *line_selection_tag, const char* li
     bool two_or_more_characters = false;
     bool first_line_processed = false;
 
+    int capacity = 1;
+    int lenght = 0;
+
     ParseState state = STATE_START;
 
-    int lenght = 0;
-    int capacity = 1;
+    Word *word = (Word*)calloc(1, sizeof(Word));
+    if (word) { return false; };
+
+    word->capacity = INITIAL_CAPACITY;
+    word->length = 0;
+    word->buffer = (char*)calloc(word->capacity, sizeof(char));
+    if (!word->buffer) { free(word); return false; }
 
     char **end = text_buffer->lines + text_buffer->count;
-
     for (char **line = text_buffer->lines; line < end; line++) {
         if (!first_line_processed) {
             int first_line_new_len = strlen(line_selection_tag) + strlen(line_selection_tag) + strlen(*line) + 1;
@@ -236,21 +267,52 @@ bool ParseText(Text* text_buffer, const char *line_selection_tag, const char* li
             continue;
         }
 
-        if (state != STATE_END) { return false; }
+        if (state != STATE_END) { FreeWord(word); return false; }
 
-        Word *current_word = (Word*)calloc(1, sizeof(Word));
-        if (current_word) { return false; };
+        char* buffer_line = (char*)calloc(strlen(*line), sizeof(char));
 
         for (char *char_ptr = *line; *char_ptr != '\0'; char_ptr++) {
+            if ((*char_ptr == '\0' || *char_ptr == '\n') && (state == STATE_IN_SPACE || state == STATE_IN_WORD)) {
+                state = STATE_END;
+            } else if (state == STATE_END) {
+                break;
+            } else if (state == STATE_IN_SPACE || isspace(char_ptr)) {
+                state = STATE_IN_SPACE;
+
+                AppendToString(buffer_line, char_ptr);
+            }
             switch (state) {
                 case STATE_START:
-                if (isspace(char_ptr)) {
+                if (*char_ptr == '\0') {
+                    state = STATE_END;
+                } else if (isspace(char_ptr)) {
+                    state = STATE_IN_SPACE;
+                } else {
+                    state = STATE_IN_WORD;
+                }
+
+                case STATE_END:
+                break;
+
+                case STATE_IN_SPACE:
+                if (*char_ptr == '\n') {
+                    state = STATE_END;
+                } else if (isspace(char_ptr)) {
+                    state = STATE_IN_SPACE;
+                } else {
+                    if (!word) { return false; }
+                    if (!ResetWord(word)) { return false; }
+                }
+
+                case STATE_IN_WORD:
+                if (*char_ptr == '\n' || *char_ptr == '\n') {
+                    state = STATE_END;
+                } else if (isspace(char_ptr)) {
                     state = STATE_IN_SPACE;
 
-                    if (current_word->buffer) {
+                    if (!AppendWordToLine()) {
+
                     }
-                }
-                case STATE_IN_SPACE:
                 if (isalpha(char_ptr) || isdigit(char_ptr)) {
                     state = STATE_IN_WORD;
 
