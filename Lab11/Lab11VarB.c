@@ -17,14 +17,13 @@ bool FreeTextBuffer(Text*);
 
 char* ReadLineFromFile(FILE*);
 bool InputTextFormFile(FILE*, Text**);
-bool ParseText(Text*, const char*, const char*);
+bool ParseText(Text*, const char*);
 bool WriteHTMLFile(FILE*, FILE*, Text*, Text*, const char*);
 bool OutputText(Text*);
 
 int main(void) {
     char *marker = "{{CONTENT}}";
-    const char *opening = "<H1>";
-    const char *closing = "</H1>";
+    const char *handler = "<H1>";
 
     const char *input_filename = "input.txt";
     const char *output_filename = "output.txt";
@@ -67,7 +66,7 @@ int main(void) {
 
     fclose(input_file);
 
-    if (!ParseText(text_buffer, opening, closing)) {
+    if (!ParseText(text_buffer, handler)) {
         fprintf(stderr, "Ошибка: парс текста из файла неудался\n");
         return 1;
     }
@@ -155,26 +154,43 @@ bool InputTextFormFile(FILE *input_file, Text **text_buffer) {
     return true;
 }
 
-bool ParseText(Text* text_buffer, const char *opening, const char *closing) {
-    bool flag = false;
+bool ParseText(Text* text_buffer, const char *handler) {
+    bool two_or_more_characters = false;
+    bool first_line_processed = false;
     char present_char;
 
     char **end = text_buffer->lines + text_buffer->count;
+
     for (char **line = text_buffer->lines; line < end; line++) {
         present_char = '\0';
+
+        if (!first_line_processed) {
+            int first_line_new_len = strlen(handler) + strlen(handler) + strlen(*line) + 1;
+            char *new_first_line = (char*)calloc(first_line_new_len, sizeof(char));
+
+            if (!new_first_line) { return false; }
+
+            sprintf(new_first_line, "%s%s%s", handler, *line, handler);
+            free(*line);
+            *line = new_first_line;
+
+            first_line_processed = true;
+            continue;
+        }
+
         for (char *char_ptr = *line; *char_ptr != '\0'; char_ptr++) {
-            if (*char_ptr == present_char) { flag = true; break; }
+            if (*char_ptr == present_char) { two_or_more_characters = true; break; }
 
             present_char = *char_ptr;
         }
-        if (flag) {
-            flag = false;
+        if (two_or_more_characters) {
+            two_or_more_characters = false;
 
-            int updated_len = strlen(opening) + strlen(closing) + strlen(*line) + 1;
+            int updated_len = strlen(handler) + strlen(handler) + strlen(*line) + 1;
             char *updated_line = (char*)calloc(updated_len, sizeof(char));
             if (!updated_line) { continue; }
 
-            sprintf(updated_line, "%s%s%s", opening, *line, closing);
+            sprintf(updated_line, "%s%s%s", handler, *line, handler);
 
             free(*line);
             *line = updated_line;
