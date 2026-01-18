@@ -183,19 +183,38 @@ bool AddCharToWord(Word *word, char caracter) {
     return true;
 }
 
-bool AppendToString(char *used_string, char *inserted_string) {
-    if (!used_string || !inserted_string) { return false; }
+bool AppendStringToLine(char **updated_line, const char *line) {
+    if (!updated_line || !*updated_line || !line) return false;
 
-    size_t str_len = strlen(inserted_string);
-    size_t needed_line_len = strlen(used_string) + str_len;
-    if (str_len == 0) return true;
+    size_t current_len = strlen(*updated_line);
+    size_t line_len = strlen(line);
+    size_t new_len = current_len + line_len + 1;
 
-    char *new_used_string = (char*)realloc(used_string, needed_line_len);
-    if (!new_used_string) { return false; }
-    used_string = new_used_string;
+    char *new_buffer = (char*)realloc(*updated_line, new_len * sizeof(char));
+    if (!new_buffer) return false;
 
-    while (*inserted_string != '\0') { used_string++ = inserted_string++; }
-    (*used_string)[needed_line_len] = '\0';
+    *updated_line = new_buffer;
+
+    memcpy(*updated_line + current_len, line, line_len);
+    (*updated_line)[new_len - 1] = '\0';
+
+    return true;
+}
+
+bool AppendStringToLineWithUpdateLen(char **updated_line, size_t *updated_line_len, size_t *updated_line_len_capacity, char *line) {
+    size_t needed = *updated_line_len + 2;
+    size_t line_len = strlen(line);
+
+    while (needed >= *updated_line_len_capacity) {
+        *updated_line_len_capacity *= 2;
+        char *new_result = (char*)realloc(*updated_line, *updated_line_len_capacity * sizeof(char));
+        if (!new_result) return false;
+        *updated_line = new_result;
+    }
+
+    memcpy(*updated_line + *updated_line_len, line, line_len);
+    *updated_line_len += line_len;
+    (*updated_line)[*updated_line_len] = '\0';
 
     return true;
 }
@@ -279,7 +298,13 @@ bool ParseText(Text* text_buffer, const char *line_selection_tag, const char* li
             } else if (state == STATE_IN_SPACE || isspace(char_ptr)) {
                 state = STATE_IN_SPACE;
 
-                AppendToString(buffer_line, char_ptr);
+                if (AppendStringToLine(&buffer_line, char_ptr)) {
+
+                }
+            } else if (state == STATE_IN_SPACE || isalpha(char_ptr)) {
+                state = STATE_IN_WORD;
+
+                AppendToLine(word->buffer, char *inserted_string)
             }
             switch (state) {
                 case STATE_START:
