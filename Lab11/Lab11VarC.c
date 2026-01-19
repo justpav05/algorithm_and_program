@@ -121,19 +121,19 @@ bool FreeTextBuffer(Text *text_buffer) {
     return true;
 }
 
-size_t GetCountLinesFromFile(FILE *file) {
-    long corrector_possition = ftell(file);
+size_t GetLenghtLineFromFile(FILE *file) {
+    long  previos_possition = ftell(file);
     size_t length = 0;
 
     int character;
     while ((character = fgetc(file)) != EOF && character != '\n') { length++; }
-    fseek(file, corrector_possition, SEEK_SET);
+    fseek(file, previos_possition, SEEK_SET);
 
     return length;
 }
 
 char* ReadLineFromFile(FILE *input_file) {
-    int length = GetCountLinesFromFile(input_file);
+    int length = GetLenghtLineFromFile(input_file);
     if (length == 0) return NULL;
 
     char *char_array = (char*)calloc(length + 1, sizeof(char));
@@ -219,22 +219,25 @@ bool AppendStringToLineWithUpdateLen(char **updated_line, size_t *updated_line_l
     return true;
 }
 
-bool AppendWordToLine(char **text_line, size_t *text_line_len, const char *line_add) {
-    size_t str_len = strlen(line_add);
-    size_t needed_line_len = *text_line_len + str_len;
+bool AppendWordToLine(char **text_line, const char *word) {
+    if (!word) { return false; }
 
-    char *new_text_line = (char*)realloc(*text_line, needed_line_len);
-    if (!new_text_line) return false;
-    *text_line = new_text_line;
+    size_t current_len = (*text_line) ? strlen(*text_line) : 0;
+    size_t word_len = strlen(word);
+    size_t new_len = current_len + word_len + 1;
 
-    strcat(*text_line, line_add);
-    *text_line_len += str_len;
+    char *new_line = (char*)realloc(*text_line, new_len * sizeof(char));
+    if (!new_line) return false;
+
+    *text_line = new_line;
+
+    memcpy(*text_line + current_len, word, word_len + 1);  // +1 чтобы скопировать '\0'
 
     return true;
 }
 
 bool ResetWord(Word *word) {
-    if (!word) return false;
+    if (!word) { return false; }
 
     word->length = 0;
     word->capacity = INITIAL_CAPACITY;
@@ -252,6 +255,10 @@ bool FreeWord(Word *word) {
     free(word);
 
     return true;
+}
+
+ParseState ProcessCharacter(char current_char, ParseState state, ) {
+
 }
 
 bool ParseText(Text* text_buffer, const char *line_selection_tag, const char* line_bold_start_tag, const char* line_bold_end_tag) {
@@ -298,76 +305,47 @@ bool ParseText(Text* text_buffer, const char *line_selection_tag, const char* li
             } else if (state == STATE_IN_SPACE || isspace(char_ptr)) {
                 state = STATE_IN_SPACE;
 
-                if (AppendStringToLine(&buffer_line, char_ptr)) {
+                if (!AppendStringToLine(&buffer_line, char_ptr)) {
+                    FreeTextBuffer(text_buffer);
+                    free(buffer_line);
 
+                    return false;
                 }
             } else if (state == STATE_IN_SPACE || isalpha(char_ptr)) {
                 state = STATE_IN_WORD;
 
-                AppendToLine(word->buffer, char *inserted_string)
-            }
-            switch (state) {
-                case STATE_START:
-                if (*char_ptr == '\0') {
-                    state = STATE_END;
-                } else if (isspace(char_ptr)) {
-                    state = STATE_IN_SPACE;
-                } else {
-                    state = STATE_IN_WORD;
+               if (!AppendStringToLineWithUpdateLen(&(word->buffer), &(word->length), &(word->capacity), char_ptr)) {
+                   FreeTextBuffer(text_buffer);
+                   free(buffer_line);
+
+                   return false;
+               }
+            } else if (state == STATE_IN_WORD || isspace(char_ptr)) {
+                state = STATE_IN_SPACE;
+
+                if (!AppendStringToLine(&buffer_line, word->buffer)) {
+                    FreeTextBuffer(text_buffer);
+                    free(buffer_line);
+
+                    return false;
                 }
 
-                case STATE_END:
-                break;
+                if (!ResetWord(word)) {
+                    FreeTextBuffer(text_buffer);
+                    free(buffer_line);
 
-                case STATE_IN_SPACE:
-                if (*char_ptr == '\n') {
-                    state = STATE_END;
-                } else if (isspace(char_ptr)) {
-                    state = STATE_IN_SPACE;
-                } else {
-                    if (!word) { return false; }
-                    if (!ResetWord(word)) { return false; }
-                }
-
-                case STATE_IN_WORD:
-                if (*char_ptr == '\n' || *char_ptr == '\n') {
-                    state = STATE_END;
-                } else if (isspace(char_ptr)) {
-                    state = STATE_IN_SPACE;
-
-                    if (!AppendWordToLine()) {
-
-                    }
-                if (isalpha(char_ptr) || isdigit(char_ptr)) {
+                    return false;
+                } else if (state == STATE_IN_WORD || isalpha(char_ptr)) {
                     state = STATE_IN_WORD;
 
-                    if (lenght >= capacity) {
-                        capacity *= 2;
-                        char *new_buffer = (char*)realloc(current_word->buffer, capacity);
-                        if (!new_buffer) { return false; }
-                        current_word->buffer = new_buffer;
+                    if (!AppendStringToLineWithUpdateLen(&(word->buffer), &(word->length), &(word->capacity), char_ptr)) {
+                        FreeTextBuffer(text_buffer);
+                        free(buffer_line);
+
+                        return false;
                     }
-
-                    if (*char_ptr == 'A') {
-                        if (capacity <= strlen(line_bold_start_tag) + strlen(line_bold_end_tag) + 1) {
-                            capacity *= 2;
-                            char *new_buffer = (char*)realloc(current_word->buffer, capacity);
-                            if (!new_buffer) { return false; }
-                            current_word->buffer = new_buffer;
-                        }
-
-                        current_word->buffer[lenght] = *line_bold_start_tag;
-                        current_word->buffer[lenght + 1] = *char_ptr;
-                        current_word->buffer[lenght + 2] = *line_bold_end_tag;
-                    }
-
-                    current_word->buffer[lenght++] = *char_ptr;
                 }
-
             }
-            int line_new_len = strlen(line_bold_start_tag) + strlen(line_bold_end_tag) + strlen(*line) + 1;
-            char *new_first_line = (char*)calloc(line_new_len, sizeof(char));
-            if (!new_first_line) { return false; }
         }
     }
 
